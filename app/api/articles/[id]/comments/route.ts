@@ -5,17 +5,24 @@ import prisma from "@/lib/prisma"
 import Article from "@/models/Article"
 import { commentSchema } from "@/lib/validations/article"
 
-// GET comments for an article
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    const { id } = params
+// Utility to extract article ID from the URL
+function extractArticleId(url: string): string | null {
+  const parts = new URL(url).pathname.split("/")
+  const idIndex = parts.indexOf("articles") + 1
+  return parts[idIndex] || null
+}
 
-    // Connect to MongoDB
+// GET comments for an article
+export async function GET(req: NextRequest) {
+  try {
+    const id = extractArticleId(req.url)
+    if (!id) {
+      return NextResponse.json({ error: "Article ID is required" }, { status: 400 })
+    }
+
     await connectToMongoDB()
 
-    // Find article
     const article = await Article.findById(id)
-
     if (!article) {
       return NextResponse.json({ error: "Article not found" }, { status: 404 })
     }
@@ -28,7 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 // POST add comment to article
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser(req)
 
@@ -36,10 +43,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
-    const body = await req.json()
+    const id = extractArticleId(req.url)
+    if (!id) {
+      return NextResponse.json({ error: "Article ID is required" }, { status: 400 })
+    }
 
-    // Validate input
+    const body = await req.json()
     const validationResult = commentSchema.safeParse(body)
     if (!validationResult.success) {
       return NextResponse.json({ error: "Validation failed", details: validationResult.error.errors }, { status: 400 })
@@ -47,17 +56,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const { content } = validationResult.data
 
-    // Connect to MongoDB
     await connectToMongoDB()
 
-    // Find article
     const article = await Article.findById(id)
-
     if (!article) {
       return NextResponse.json({ error: "Article not found" }, { status: 404 })
     }
 
-    // Add comment
     const comment = {
       userId: user.id,
       content,
@@ -67,7 +72,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     article.comments.push(comment)
     await article.save()
 
-    // Update comment count in PostgreSQL
     await prisma.article.update({
       where: { mongoId: id },
       data: { commentCount: { increment: 1 } },
