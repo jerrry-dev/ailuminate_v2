@@ -1,16 +1,13 @@
-import type { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import jwt, { Secret, SignOptions } from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import prisma from "@/lib/prisma";
 
-// Validate and get JWT secret from environment variables
-const JWT_SECRET: Secret | undefined = process.env.JWT_SECRET;
-const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || "7d";
-
-if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET is not defined in environment variables");
-}
+// Hardcoded for development/testing. In production, use process.env.
+const JWT_SECRET: Secret = "your_super_secret_key_1234567890";
+const JWT_EXPIRES_IN = "7d";
 
 // Interface for decoded JWT payload
 interface DecodedToken {
@@ -25,20 +22,23 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 // Compare plain password with hashed password
-export async function comparePasswords(password: string, hashedPassword: string): Promise<boolean> {
+export async function comparePasswords(
+  password: string,
+  hashedPassword: string
+): Promise<boolean> {
   return bcrypt.compare(password, hashedPassword);
 }
 
 // Generate JWT token with payload and expiration
 export function generateToken(payload: string | object | Buffer): string {
   const options: SignOptions = { expiresIn: JWT_EXPIRES_IN };
-  return jwt.sign(payload, JWT_SECRET as Secret, options);
+  return jwt.sign(payload, JWT_SECRET, options);
 }
 
 // Verify JWT token and return decoded payload or null
 export function verifyToken(token: string): DecodedToken | null {
   try {
-    return jwt.verify(token, JWT_SECRET as Secret) as DecodedToken;
+    return jwt.verify(token, JWT_SECRET) as DecodedToken;
   } catch (error) {
     console.error("JWT verification error:", error);
     return null;
@@ -47,11 +47,9 @@ export function verifyToken(token: string): DecodedToken | null {
 
 // Set authentication cookie in the response
 export function setAuthCookie(res: NextResponse, token: string): void {
-  res.cookies.set({
-    name: "auth_token",
-    value: token,
+  res.cookies.set("auth_token", token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: true,
     sameSite: "strict",
     path: "/",
     maxAge: 60 * 60 * 24 * 7, // 7 days
@@ -60,11 +58,9 @@ export function setAuthCookie(res: NextResponse, token: string): void {
 
 // Clear authentication cookie from the response
 export function clearAuthCookie(res: NextResponse): void {
-  res.cookies.set({
-    name: "auth_token",
-    value: "",
+  res.cookies.set("auth_token", "", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: true,
     sameSite: "strict",
     path: "/",
     maxAge: 0,
@@ -78,7 +74,6 @@ export async function getCurrentUser(req: NextRequest) {
   if (!token) return null;
 
   const decoded = verifyToken(token);
-
   if (!decoded || typeof decoded !== "object" || !decoded.id) return null;
 
   try {
@@ -108,7 +103,6 @@ export async function getCurrentAdmin(req: NextRequest) {
   if (!token) return null;
 
   const decoded = verifyToken(token);
-
   if (!decoded || typeof decoded !== "object" || !decoded.id || !decoded.isAdmin) return null;
 
   try {
@@ -141,4 +135,3 @@ export function getAdminToken(): string | undefined {
   const cookieStore = cookies();
   return cookieStore.get("admin_token")?.value;
 }
-
