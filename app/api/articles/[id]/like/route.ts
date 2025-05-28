@@ -4,8 +4,15 @@ import connectToMongoDB from "@/lib/mongodb"
 import prisma from "@/lib/prisma"
 import Article from "@/models/Article"
 
+// Utility to extract article ID from URL
+function extractArticleId(url: string): string | null {
+  const parts = new URL(url).pathname.split("/")
+  const idIndex = parts.indexOf("articles") + 1
+  return parts[idIndex] || null
+}
+
 // POST like/unlike article
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser(req)
 
@@ -13,14 +20,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
+    const id = extractArticleId(req.url)
+    if (!id) {
+      return NextResponse.json({ error: "Article ID is required" }, { status: 400 })
+    }
 
     // Connect to MongoDB
     await connectToMongoDB()
 
     // Find article
     const article = await Article.findById(id)
-
     if (!article) {
       return NextResponse.json({ error: "Article not found" }, { status: 404 })
     }
