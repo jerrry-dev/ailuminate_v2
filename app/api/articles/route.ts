@@ -1,0 +1,117 @@
+import { type NextRequest, NextResponse } from "next/server"
+import { getCurrentUser } from "@/lib/auth"
+import connectToMongoDB from "@/lib/mongodb"
+import prisma from "@/lib/prisma"
+import Article from "@/models/Article"
+import { createArticleSchema } from "@/lib/validations/article"
+import { generateSlug, calculateReadTime } from "@/lib/utils"
+
+// GET all articles (with pagination and filters)
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const page = Number.parseInt(searchParams.get("page") || "1")
+    const limit = Number.parseInt(searchParams.get("limit") || "10")
+    const status = searchParams.get("status") || "published"
+    const tag = searchParams.get("tag")
+    const search = searchParams.get("search")
+    const authorId = searchParams.get("authorId")
+
+    const skip = (page - 1) * limit
+
+    // Connect to MongoDB
+    await connectToMongoDB()
+
+    // Build query
+    const query: any = { status }
+    if (tag) query.tags = tag
+    if (authorId) query.authorId = authorId
+    if (search) query.$text = { $search: search }
+
+    // Get articles
+    const articles = await Article.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit)
+
+    // Get total count
+    const total = await Article.countDocuments(query)
+
+    return NextResponse.json({
+      articles,
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      },
+    })
+  } catch (error) {
+    console.error("Get articles error:", error)
+    return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
+  }
+}
+
+// POST create new article
+export async function POST(req: NextRequest) {
+  try {
+    const user = await getCurrentUser(req)
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const body = await req.json()
+
+    // Validate input
+    const validationResult = createArticleSchema.safeParse(body)
+    if (!validationResult.success) {
+      return NextResponse.json({ error: "Validation failed", details: validationResult.error.errors }, { status: 400 })
+    }
+
+    const { title, content, excerpt, tags, thumbnail, status } = validationResult.data
+
+    // Generate slug
+    let slug = generateSlug(title)
+
+    // Connect to MongoDB
+    await connectToMongoDB()
+
+    // Check if slug exists
+    const existingArticle = await Article.findOne({ slug })
+    if (existingArticle) {
+      // Append random string to make slug unique
+      slug = `${slug}-${Math.random().toString(36).substring(2, 8)}`
+    }
+
+    // Calculate read time
+    const readTime = calculateReadTime(content)
+
+    // Create article in MongoDB
+    const article = await Article.create({
+      title,
+      content,
+      excerpt: excerpt || content.substring(0, 150) + "...",
+      slug,
+      status,
+      tags: tags || [],
+      thumbnail,
+      readTime,
+      authorId: user.id,
+    })
+
+    // Create reference in PostgreSQL
+    await prisma.article.create({
+      data: {
+        mongoId: article._id.toString(),
+        title,
+        slug,
+        excerpt: excerpt || content.substring(0, 150) + "...",
+        status,
+        authorId: user.id,
+      },
+    })
+
+    return NextResponse.json({ article }, { status: 201 })
+  } catch (error) {
+    console.error("Create article error:", error)
+    return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
+  }
+}
