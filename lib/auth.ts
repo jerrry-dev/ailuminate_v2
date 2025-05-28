@@ -136,4 +136,3 @@ export async function getAdminToken(): Promise<string | undefined> {
   const cookieStore = await cookies(); // ✅ Await the Promise
   return cookieStore.get("admin_token")?.value;
 }
-

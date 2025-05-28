@@ -11,4 +11,9 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["prisma", "@prisma/client", "mongodb"]
+  external_node_modules = ["prisma", "@prisma/client", "mongodb", "mongoose"]
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

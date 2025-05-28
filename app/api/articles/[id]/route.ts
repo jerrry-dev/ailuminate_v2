@@ -1,4 +1,4 @@
-  import { type NextRequest, NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
   import { getCurrentUser } from "@/lib/auth"
   import connectToMongoDB from "@/lib/mongodb"
   import prisma from "@/lib/prisma"

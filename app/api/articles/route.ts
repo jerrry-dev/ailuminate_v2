@@ -109,4 +109,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }
-

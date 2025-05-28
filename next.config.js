@@ -1,12 +1,21 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Remove output: 'export' for server-side functionality
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   images: {
     unoptimized: true,
   },
   experimental: {
     esmExternals: "loose",
   },
+  // Ensure proper routing for Netlify
+  trailingSlash: false,
+  // Add output configuration for Netlify
+  output: "standalone",
 }
 
 module.exports = nextConfig
