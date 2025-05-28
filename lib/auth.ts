@@ -1,16 +1,18 @@
 import type { NextRequest, NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
+import jwt, { Secret } from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import prisma from "@/lib/prisma";
 
-const JWT_SECRET = (process.env.JWT_SECRET || "morismr") as string;
+// Define and validate JWT environment variables
+const JWT_SECRET: Secret = process.env.JWT_SECRET || "morismr";
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 
 if (!JWT_SECRET) {
   throw new Error("JWT_SECRET is not defined in environment variables");
 }
 
+// Password utilities
 export async function hashPassword(password: string): Promise<string> {
   return await bcrypt.hash(password, 10);
 }
@@ -19,18 +21,20 @@ export async function comparePasswords(password: string, hashedPassword: string)
   return await bcrypt.compare(password, hashedPassword);
 }
 
+// JWT generation and verification
 export function generateToken(payload: string | object | Buffer): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  return jwt.sign(payload, JWT_SECRET as Secret, { expiresIn: JWT_EXPIRES_IN });
 }
 
 export function verifyToken(token: string): any {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    return jwt.verify(token, JWT_SECRET as Secret);
   } catch (error) {
     return null;
   }
 }
 
+// Cookie utilities
 export function setAuthCookie(res: NextResponse, token: string): void {
   res.cookies.set({
     name: "auth_token",
@@ -55,13 +59,17 @@ export function clearAuthCookie(res: NextResponse): void {
   });
 }
 
+// User authentication
 export async function getCurrentUser(req: NextRequest) {
   const token = req.cookies.get("auth_token")?.value;
 
-  if (!token) return null;
+  if (!token) {
+    return null;
+  }
 
   try {
     const decoded = verifyToken(token);
+
     if (!decoded || typeof decoded !== "object" || !("id" in decoded)) {
       return null;
     }
@@ -85,14 +93,23 @@ export async function getCurrentUser(req: NextRequest) {
   }
 }
 
+// Admin authentication
 export async function getCurrentAdmin(req: NextRequest) {
   const token = req.cookies.get("admin_token")?.value;
 
-  if (!token) return null;
+  if (!token) {
+    return null;
+  }
 
   try {
     const decoded = verifyToken(token);
-    if (!decoded || typeof decoded !== "object" || !("id" in decoded) || !(decoded as any).isAdmin) {
+
+    if (
+      !decoded ||
+      typeof decoded !== "object" ||
+      !("id" in decoded) ||
+      !(decoded as any).isAdmin
+    ) {
       return null;
     }
 
@@ -114,6 +131,7 @@ export async function getCurrentAdmin(req: NextRequest) {
   }
 }
 
+// Read tokens directly from cookies
 export function getAuthToken(): string | undefined {
   const cookieStore = cookies();
   return cookieStore.get("auth_token")?.value;
