@@ -124,14 +124,16 @@ export async function getCurrentAdmin(req: NextRequest) {
   }
 }
 
+
 // Read auth token from cookies in server context
-export function getAuthToken(): string | undefined {
-  const cookieStore = cookies();
+export async function getAuthToken(): Promise<string | undefined> {
+  const cookieStore = await cookies(); // ✅ Await the Promise
   return cookieStore.get("auth_token")?.value;
 }
 
 // Read admin token from cookies in server context
-export function getAdminToken(): string | undefined {
-  const cookieStore = cookies();
+export async function getAdminToken(): Promise<string | undefined> {
+  const cookieStore = await cookies(); // ✅ Await the Promise
   return cookieStore.get("admin_token")?.value;
 }
+
