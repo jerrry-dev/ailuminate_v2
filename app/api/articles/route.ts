@@ -10,8 +10,8 @@ import { generateSlug, calculateReadTime } from "@/lib/utils"
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
-    const page = Number.parseInt(searchParams.get("page") || "1")
-    const limit = Number.parseInt(searchParams.get("limit") || "10")
+    const page = parseInt(searchParams.get("page") || "1", 10)
+    const limit = parseInt(searchParams.get("limit") || "10", 10)
     const status = searchParams.get("status") || "published"
     const tag = searchParams.get("tag")
     const search = searchParams.get("search")
@@ -19,19 +19,18 @@ export async function GET(req: NextRequest) {
 
     const skip = (page - 1) * limit
 
-    // Connect to MongoDB
     await connectToMongoDB()
 
-    // Build query
     const query: any = { status }
     if (tag) query.tags = tag
     if (authorId) query.authorId = authorId
     if (search) query.$text = { $search: search }
 
-    // Get articles
-    const articles = await Article.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit)
+    const articles = await Article.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
 
-    // Get total count
     const total = await Article.countDocuments(query)
 
     return NextResponse.json({
@@ -59,32 +58,28 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-
-    // Validate input
     const validationResult = createArticleSchema.safeParse(body)
+
     if (!validationResult.success) {
-      return NextResponse.json({ error: "Validation failed", details: validationResult.error.errors }, { status: 400 })
+      return NextResponse.json(
+        { error: "Validation failed", details: validationResult.error.errors },
+        { status: 400 }
+      )
     }
 
     const { title, content, excerpt, tags, thumbnail, status } = validationResult.data
 
-    // Generate slug
     let slug = generateSlug(title)
 
-    // Connect to MongoDB
     await connectToMongoDB()
 
-    // Check if slug exists
     const existingArticle = await Article.findOne({ slug })
     if (existingArticle) {
-      // Append random string to make slug unique
       slug = `${slug}-${Math.random().toString(36).substring(2, 8)}`
     }
 
-    // Calculate read time
     const readTime = calculateReadTime(content)
 
-    // Create article in MongoDB
     const article = await Article.create({
       title,
       content,
@@ -97,7 +92,6 @@ export async function POST(req: NextRequest) {
       authorId: user.id,
     })
 
-    // Create reference in PostgreSQL
     await prisma.article.create({
       data: {
         mongoId: article._id.toString(),
@@ -115,3 +109,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 })
   }
 }
+
