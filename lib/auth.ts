@@ -1,40 +1,51 @@
 import type { NextRequest, NextResponse } from "next/server";
-import jwt, { Secret } from "jsonwebtoken";
+import jwt, { Secret, SignOptions } from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import prisma from "@/lib/prisma";
 
-// Define and validate JWT environment variables
-const JWT_SECRET: Secret = process.env.JWT_SECRET || "morismr";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
+// Validate and get JWT secret from environment variables
+const JWT_SECRET: Secret | undefined = process.env.JWT_SECRET;
+const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || "7d";
 
 if (!JWT_SECRET) {
   throw new Error("JWT_SECRET is not defined in environment variables");
 }
 
-// Password utilities
+// Interface for decoded JWT payload
+interface DecodedToken {
+  id: string;
+  isAdmin?: boolean;
+  [key: string]: any;
+}
+
+// Hash a password
 export async function hashPassword(password: string): Promise<string> {
-  return await bcrypt.hash(password, 10);
+  return bcrypt.hash(password, 10);
 }
 
+// Compare plain password with hashed password
 export async function comparePasswords(password: string, hashedPassword: string): Promise<boolean> {
-  return await bcrypt.compare(password, hashedPassword);
+  return bcrypt.compare(password, hashedPassword);
 }
 
-// JWT generation and verification
+// Generate JWT token with payload and expiration
 export function generateToken(payload: string | object | Buffer): string {
-  return jwt.sign(payload, JWT_SECRET as Secret, { expiresIn: JWT_EXPIRES_IN });
+  const options: SignOptions = { expiresIn: JWT_EXPIRES_IN };
+  return jwt.sign(payload, JWT_SECRET as Secret, options);
 }
 
-export function verifyToken(token: string): any {
+// Verify JWT token and return decoded payload or null
+export function verifyToken(token: string): DecodedToken | null {
   try {
-    return jwt.verify(token, JWT_SECRET as Secret);
+    return jwt.verify(token, JWT_SECRET as Secret) as DecodedToken;
   } catch (error) {
+    console.error("JWT verification error:", error);
     return null;
   }
 }
 
-// Cookie utilities
+// Set authentication cookie in the response
 export function setAuthCookie(res: NextResponse, token: string): void {
   res.cookies.set({
     name: "auth_token",
@@ -47,6 +58,7 @@ export function setAuthCookie(res: NextResponse, token: string): void {
   });
 }
 
+// Clear authentication cookie from the response
 export function clearAuthCookie(res: NextResponse): void {
   res.cookies.set({
     name: "auth_token",
@@ -59,23 +71,19 @@ export function clearAuthCookie(res: NextResponse): void {
   });
 }
 
-// User authentication
+// Fetch current user from the request token cookie and database
 export async function getCurrentUser(req: NextRequest) {
   const token = req.cookies.get("auth_token")?.value;
 
-  if (!token) {
-    return null;
-  }
+  if (!token) return null;
+
+  const decoded = verifyToken(token);
+
+  if (!decoded || typeof decoded !== "object" || !decoded.id) return null;
 
   try {
-    const decoded = verifyToken(token);
-
-    if (!decoded || typeof decoded !== "object" || !("id" in decoded)) {
-      return null;
-    }
-
     const user = await prisma.user.findUnique({
-      where: { id: (decoded as any).id },
+      where: { id: decoded.id },
       select: {
         id: true,
         email: true,
@@ -86,35 +94,26 @@ export async function getCurrentUser(req: NextRequest) {
         createdAt: true,
       },
     });
-
     return user;
   } catch (error) {
+    console.error("Error fetching user from DB:", error);
     return null;
   }
 }
 
-// Admin authentication
+// Fetch current admin (with isAdmin check) from the request token cookie and database
 export async function getCurrentAdmin(req: NextRequest) {
   const token = req.cookies.get("admin_token")?.value;
 
-  if (!token) {
-    return null;
-  }
+  if (!token) return null;
+
+  const decoded = verifyToken(token);
+
+  if (!decoded || typeof decoded !== "object" || !decoded.id || !decoded.isAdmin) return null;
 
   try {
-    const decoded = verifyToken(token);
-
-    if (
-      !decoded ||
-      typeof decoded !== "object" ||
-      !("id" in decoded) ||
-      !(decoded as any).isAdmin
-    ) {
-      return null;
-    }
-
     const admin = await prisma.admin.findUnique({
-      where: { id: (decoded as any).id },
+      where: { id: decoded.id },
       select: {
         id: true,
         email: true,
@@ -124,20 +123,22 @@ export async function getCurrentAdmin(req: NextRequest) {
         createdAt: true,
       },
     });
-
     return admin;
   } catch (error) {
+    console.error("Error fetching admin from DB:", error);
     return null;
   }
 }
 
-// Read tokens directly from cookies
+// Read auth token from cookies in server context
 export function getAuthToken(): string | undefined {
   const cookieStore = cookies();
   return cookieStore.get("auth_token")?.value;
 }
 
+// Read admin token from cookies in server context
 export function getAdminToken(): string | undefined {
   const cookieStore = cookies();
   return cookieStore.get("admin_token")?.value;
 }
+
