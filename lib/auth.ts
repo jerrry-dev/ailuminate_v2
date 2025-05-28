@@ -1,11 +1,15 @@
 import type { NextRequest, NextResponse } from "next/server"
-import jwt from "jsonwebtoken"
+import jwt, { Secret } from "jsonwebtoken"
 import bcrypt from "bcryptjs"
 import { cookies } from "next/headers"
 import prisma from "@/lib/prisma"
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
+const JWT_SECRET: Secret = process.env.JWT_SECRET || "morismr"
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d"
+
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET is not defined in environment variables")
+}
 
 export async function hashPassword(password: string): Promise<string> {
   return await bcrypt.hash(password, 10)
@@ -15,7 +19,7 @@ export async function comparePasswords(password: string, hashedPassword: string)
   return await bcrypt.compare(password, hashedPassword)
 }
 
-export function generateToken(payload: any): string {
+export function generateToken(payload: string | object | Buffer): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
 }
 
@@ -61,12 +65,12 @@ export async function getCurrentUser(req: NextRequest) {
   try {
     const decoded = verifyToken(token)
 
-    if (!decoded || !decoded.id) {
+    if (!decoded || typeof decoded !== "object" || !("id" in decoded)) {
       return null
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
+      where: { id: (decoded as any).id },
       select: {
         id: true,
         email: true,
@@ -94,12 +98,17 @@ export async function getCurrentAdmin(req: NextRequest) {
   try {
     const decoded = verifyToken(token)
 
-    if (!decoded || !decoded.id || !decoded.isAdmin) {
+    if (
+      !decoded ||
+      typeof decoded !== "object" ||
+      !("id" in decoded) ||
+      !(decoded as any).isAdmin
+    ) {
       return null
     }
 
     const admin = await prisma.admin.findUnique({
-      where: { id: decoded.id },
+      where: { id: (decoded as any).id },
       select: {
         id: true,
         email: true,
