@@ -7,20 +7,27 @@ export const signupSchema = z
       .min(3, { message: "Username must be at least 3 characters" })
       .max(30, { message: "Username must be less than 30 characters" })
       .regex(/^[a-zA-Z0-9_]+$/, { message: "Username can only contain letters, numbers, and underscores" }),
+
     email: z.string().email({ message: "Please enter a valid email address" }),
+
     password: z
       .string()
       .min(8, { message: "Password must be at least 8 characters" })
       .regex(/[A-Z]/, { message: "Password must contain at least one uppercase letter" })
       .regex(/[a-z]/, { message: "Password must contain at least one lowercase letter" })
       .regex(/[0-9]/, { message: "Password must contain at least one number" }),
+
     confirmPassword: z.string(),
-    agreeToTerms: z.boolean().refine((val) => val === true, { message: "You must agree to the terms and conditions" }),
+
+    agreeToTerms: z.boolean().refine((val) => val === true, {
+      message: "You must agree to the terms and conditions",
+    }),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
   })
+
 
 export const loginSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
