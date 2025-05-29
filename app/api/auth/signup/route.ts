@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Validation failed", details: validationResult.error.errors }, { status: 400 })
     }
 
-    const { username, email, password } = validationResult.data
+    const { username, email, password, confirmPassword, agreeToTerms } = validationResult.data
 
     // Check if user already exists
     const existingUser = await prisma.user.findFirst({
